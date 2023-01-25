@@ -1,0 +1,87 @@
+#include "EspMQTTClient.h"
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+#define DHTPIN 13  
+#define DHTTYPE DHT11
+DHT_Unified dht(DHTPIN, DHTTYPE);
+
+int led = 16;
+int btn = 18;
+EspMQTTClient client(
+  "MULTI_GUEST",
+  "guest1357",
+  "70.12.227.141",
+  "MQTTUsername",
+  "MQTTPassword",
+  "hifaker",
+  1883        
+);
+
+char *topic = "hi/faker";
+void tx(){
+  client.publish(topic, "hifaker!");
+}
+
+void Action(){
+  if(digitalRead(btn)==0){
+    client.publish("myroom/enter", "hi!");
+  }
+  else{
+    client.publish("myroom/enter", "faker~");
+  }
+}
+int t,h;
+void GetValue(){
+  sensors_event_t event;
+  dht.temperature().getEvent(&event);
+  if (isnan(event.temperature)) {
+    Serial.println(F("Error reading temperature!"));
+  }
+  else {
+    t = event.temperature;
+    client.publish("myroom/temp", "temp:"+String(t));
+  }
+  dht.humidity().getEvent(&event);
+  if (isnan(event.relative_humidity)) {
+    Serial.println(F("Error reading humidity!"));
+  }
+  else {
+    h = event.relative_humidity;
+    client.publish("myroom/humid", "humid:"+String(h));
+  }
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  dht.begin();
+  pinMode(led,OUTPUT);
+  pinMode(btn,INPUT_PULLUP);
+  client.enableDebuggingMessages();
+  client.enableHTTPWebUpdater(); // Enable the web updater. User and password default to values of MQTTUsername and MQTTPassword. These can be overridded with enableHTTPWebUpdater("user", "password").
+  client.enableOTA(); // Enable OTA (Over The Air) updates. Password defaults to MQTTPassword. Port is the default OTA port. Can be overridden with enableOTA("password", port).
+  client.enableLastWillMessage("TestClient/lastwill", "I am going offline");  // You can activate the retain flag by setting the third parameter to true
+}
+
+void onConnectionEstablished()
+{
+  client.subscribe("myroom/led1", [](const String & payload) {
+    Serial.println(payload);
+    if( payload.equals("ON") ){
+      digitalWrite(led, HIGH);
+    }
+    if( payload.equals("OFF") ){
+      digitalWrite(led, LOW);
+    }
+  });
+}
+
+void loop()
+{ 
+  Action();
+  GetValue();
+  client.loop();
+  delay(1000);
+}
